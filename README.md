@@ -1,229 +1,166 @@
 # 🚀 Event-Driven Distributed Order Platform
 
-**Scalable microservices e-commerce backend** built with event-driven architecture using Kafka for asynchronous communication between services.
+[![CI](https://github.com/AloneRider-pixel/event-driven-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/AloneRider-pixel/event-driven-platform/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
----
+**Scalable e-commerce backend demonstrating event-driven microservices with Kafka, FastAPI, PostgreSQL, and Redis.**
 
-## 🏗️ Architecture
+> **Portfolio focus:** microservices + event-driven architecture + distributed workflows + reliability + API engineering.
 
+## Architecture
+
+```mermaid
+graph TB
+    CLIENT[React / Postman]
+    GW[FastAPI API Gateway\nAuth + Rate Limiting]
+    ORDER[Order Service]
+    KAFKA[(Apache Kafka)]
+    PAY[Payment Service]
+    INV[Inventory Service]
+    NOTIF[Notification Service]
+    PG[(PostgreSQL)]
+    REDIS[(Redis)]
+    DLQ[Dead Letter Queues]
+
+    CLIENT --> GW --> ORDER --> KAFKA
+    KAFKA --> PAY
+    KAFKA --> INV
+    KAFKA --> NOTIF
+    PAY --> KAFKA
+    INV --> KAFKA
+    PAY --> PG
+    INV --> PG
+    ORDER --> PG
+    GW --> REDIS
+    KAFKA -. failed events .-> DLQ
 ```
-                    React / Postman
-                         ↓
-                   API Gateway (FastAPI)
-                   Auth + Rate Limiting
-                         ↓
-                   Order Service
-                   (Kafka Producer)
-                         ↓
-                    ┌────┴────┐
-                    │  Kafka   │
-                    └────┬────┘
-              ┌──────────┼──────────┐
-              ↓          ↓          ↓
-         Payment    Inventory   Notification
-         Service     Service      Service
-              └──────────┼──────────┘
-                         ↓
-                   PostgreSQL + Redis
-```
 
-### Event Flow
-1. **Customer** places order via API Gateway
-2. **Order Service** validates and persists, publishes `OrderCreated` event to Kafka
-3. **Payment Service** consumes event, processes payment, publishes `PaymentCompleted` or `PaymentFailed`
-4. **Inventory Service** consumes `OrderCreated`, reserves stock, publishes `InventoryReserved` or `InventoryInsufficient`
-5. **Notification Service** consumes all events, sends emails/SMS to customer
-6. **Dead Letter Queue** catches failed events for manual review
+## Order lifecycle
 
----
+1. Client submits an order through the API gateway.
+2. Order Service validates and persists the order, then publishes `OrderCreated`.
+3. Payment and Inventory consume the event independently.
+4. Services publish success/failure events such as `PaymentCompleted` and `InventoryReserved`.
+5. Notification Service consumes domain events and dispatches customer notifications.
+6. Failed events can be routed to a dead-letter queue for investigation or replay.
 
-## ✨ Features
+## Engineering capabilities
 
 ### Microservices
-- **API Gateway** — Authentication (JWT), rate limiting, request routing, API versioning
-- **Order Service** — CRUD orders, saga orchestration, idempotency keys
-- **Payment Service** — Payment processing, refund handling, retry logic
-- **Inventory Service** — Stock reservation, release on cancellation, optimistic locking
-- **Notification Service** — Email/SMS dispatch, template engine, delivery tracking
+- API gateway with authentication, rate limiting, routing, and versioned APIs.
+- Order, Payment, Inventory, and Notification services with separate responsibilities.
+- Shared event and model definitions.
 
-### Event-Driven Architecture
-- **Kafka Topics** — Separate topics per domain (orders, payments, inventory, notifications)
-- **Consumer Groups** — Independent scaling per service
-- **Dead Letter Queues** — Failed events routed for manual intervention
-- **Event Sourcing** — Full audit trail of all state changes
-- **Saga Pattern** — Distributed transaction management with compensating actions
+### Distributed systems
+- Kafka topics and consumer groups.
+- Saga-style compensation for distributed order workflows.
+- Idempotency for duplicate event delivery.
+- Exponential backoff and retry handling.
+- Dead-letter queues for failed events.
+- Optimistic inventory locking.
 
 ### Reliability
-- **Idempotency** — Duplicate event handling without side effects
-- **Retries** — Exponential backoff with jitter
-- **Circuit Breakers** — Prevent cascade failures
-- **Health Checks** — Per-service and aggregate health monitoring
-- **Graceful Degradation** — Services function independently
+- Service health/readiness endpoints.
+- Correlation IDs and structured logs.
+- Prometheus-compatible metrics.
+- Graceful degradation and independent service scaling.
 
-### Security & Performance
-- **JWT Authentication** — Token-based auth with role-based access
-- **Rate Limiting** — Redis-backed sliding window per user
-- **Caching** — Redis cache for hot data (products, inventory)
-- **Database Indexing** — Optimized queries with composite indexes
-- **Connection Pooling** — Efficient DB connections
+### Security and performance
+- JWT authentication with role-based access.
+- Redis-backed rate limiting and caching.
+- Database indexing and connection pooling.
+- Dockerized services and GitHub Actions CI/CD.
 
-### Observability
-- **Structured Logging** — JSON logs with correlation IDs across services
-- **Metrics** — Prometheus-compatible metrics per service
-- **Distributed Tracing** — Request correlation across microservices
-- **Health Endpoints** — Deep health checks with dependency status
-
----
-
-## 🛠️ Tech Stack
+## Technology stack
 
 | Layer | Technology |
-|-------|-----------|
+|---|---|
 | Services | Python 3.11, FastAPI, SQLAlchemy |
-| Messaging | Apache Kafka (Confluent), aiokafka |
-| Cache | Redis 7 |
+| Messaging | Apache Kafka, aiokafka |
 | Database | PostgreSQL 16 |
-| Auth | JWT (PyJWT), bcrypt |
-| Infra | Docker, Docker Compose |
-| CI/CD | GitHub Actions |
-| Testing | Pytest, httpx, locust |
+| Cache | Redis 7 |
+| Authentication | JWT, bcrypt |
+| Testing | Pytest, HTTPX, Locust |
+| Infrastructure | Docker, Docker Compose, GitHub Actions |
 
----
+## Repository structure
 
-## 🚀 Quick Start
+```text
+event-driven-platform/
+├── shared/                      # Shared models, events, Kafka helpers
+├── api-gateway/                 # Auth, routing, rate limiting
+├── order-service/               # Order API + event producer
+├── payment-service/             # Payment consumer + workflow
+├── inventory-service/           # Reservation consumer + stock logic
+├── notification-service/        # Event-driven notifications
+├── scripts/                     # Utilities and load testing
+├── .github/workflows/ci.yml
+├── docker-compose.yml
+└── README.md
+```
+
+## Local development
 
 ### Prerequisites
-- Docker & Docker Compose
 
-### 1. Clone & Configure
+- Docker + Docker Compose
+
+### Start
 
 ```bash
 git clone https://github.com/AloneRider-pixel/event-driven-platform.git
 cd event-driven-platform
 cp .env.example .env
-```
-
-### 2. Start All Services
-
-```bash
 docker-compose up -d
 ```
 
-This starts:
-- **Zookeeper** → localhost:2181
-- **Kafka** → localhost:9092
-- **PostgreSQL** → localhost:5432
-- **Redis** → localhost:6379
-- **API Gateway** → localhost:8000
-- **Order Service** → localhost:8001
-- **Payment Service** → localhost:8002
-- **Inventory Service** → localhost:8003
-- **Notification Service** → localhost:8004
+The stack starts Kafka, PostgreSQL, Redis, the API gateway, and the domain services.
 
-### 3. Test the Platform
+### Example request
 
 ```bash
-# Create an order
 curl -X POST http://localhost:8000/api/v1/orders \
   -H "Content-Type: application/json" \
-  -d '{"product_id": "PROD-001", "quantity": 2, "customer_id": "CUST-001"}'
-
-# Check order status
-curl http://localhost:8000/api/v1/orders/ORD-001
-
-# View Kafka topics
-docker-compose exec kafka kafka-topics --list --bootstrap-server kafka:9092
+  -d '{"product_id":"PROD-001","quantity":2,"customer_id":"CUST-001"}'
 ```
 
----
+## API surface
 
-## 📁 Project Structure
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/api/v1/orders` | Create an order |
+| GET | `/api/v1/orders/{id}` | Retrieve an order |
+| GET | `/api/v1/orders` | Paginated order list |
+| PUT | `/api/v1/orders/{id}/cancel` | Cancel an order |
+| POST | `/api/v1/orders/{id}/retry` | Retry a failed order |
+| GET | `/api/v1/inventory/{product_id}` | Check inventory |
+| GET | `/health` | Health check |
+| GET | `/metrics` | Service metrics |
 
-```
-event-driven-platform/
-├── shared/                      # Shared libraries
-│   ├── models.py                # Pydantic models shared across services
-│   ├── events.py                # Event definitions & schemas
-│   ├── kafka_utils.py           # Kafka producer/consumer helpers
-│   └── middleware.py            # Common middleware (logging, correlation)
-├── api-gateway/                 # API Gateway
-│   ├── Dockerfile
-│   ├── main.py                  # FastAPI app with routing
-│   ├── auth.py                  # JWT authentication
-│   ├── rate_limiter.py          # Redis-backed rate limiting
-│   └── routes/                  # API endpoints (v1)
-├── order-service/               # Order Microservice
-│   ├── Dockerfile
-│   ├── main.py                  # FastAPI + Kafka producer
-│   ├── models/                  # SQLAlchemy models
-│   ├── services/                # Business logic
-│   ├── kafka/                   # Kafka event publishing
-│   └── tests/                   # Service tests
-├── payment-service/             # Payment Microservice
-│   ├── Dockerfile
-│   ├── main.py                  # FastAPI + Kafka consumer
-│   ├── consumer.py              # Kafka event handler
-│   └── services/                # Payment processing
-├── inventory-service/           # Inventory Microservice
-│   ├── Dockerfile
-│   ├── main.py                  # FastAPI + Kafka consumer
-│   ├── consumer.py              # Stock reservation logic
-│   └── services/                # Inventory management
-├── notification-service/        # Notification Microservice
-│   ├── Dockerfile
-│   ├── main.py                  # FastAPI + Kafka consumer
-│   ├── consumer.py              # Event-driven notifications
-│   └── templates/               # Email/SMS templates
-├── scripts/                     # Utility scripts
-│   └── load_test.py             # Locust load testing
-├── .github/workflows/ci.yml    # CI/CD pipeline
-├── docker-compose.yml
-└── .env.example
-```
+## Event contracts
 
----
+| Topic | Producer | Consumers |
+|---|---|---|
+| `order.created` | Order Service | Payment, Inventory, Notification |
+| `order.cancelled` | Order Service | Payment, Inventory, Notification |
+| `payment.completed` | Payment Service | Order, Notification |
+| `payment.failed` | Payment Service | Order, Notification |
+| `inventory.reserved` | Inventory Service | Order, Notification |
+| `inventory.insufficient` | Inventory Service | Order, Notification |
+| `*.dlq` | Domain services | Investigation / replay |
 
-## 🔌 API Endpoints
+## Testing
 
-### Orders (v1)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/orders` | Create new order |
-| GET | `/api/v1/orders/{id}` | Get order details |
-| GET | `/api/v1/orders` | List orders (paginated) |
-| PUT | `/api/v1/orders/{id}/cancel` | Cancel order |
-| POST | `/api/v1/orders/{id}/retry` | Retry failed order |
+The project includes service-level tests plus HTTP and load-test tooling. CI should remain green before changes are merged into `main`.
 
-### Inventory
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/v1/inventory/{product_id}` | Check stock |
-| PUT | `/api/v1/inventory/{product_id}` | Update stock |
+## Roadmap
 
-### Health & Monitoring
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Service health check |
-| GET | `/metrics` | Prometheus metrics |
-| GET | `/ready` | Readiness probe |
+- Transactional outbox for reliable event publication.
+- Schema registry and versioned event contracts.
+- Kafka lag and consumer-health dashboards.
+- Distributed tracing with OpenTelemetry.
+- Kubernetes deployment and autoscaling examples.
 
----
-
-## 📊 Kafka Topics
-
-| Topic | Producer | Consumer(s) | Description |
-|-------|----------|-------------|-------------|
-| `order.created` | Order Service | Payment, Inventory, Notification | New order placed |
-| `order.cancelled` | Order Service | Payment, Inventory, Notification | Order cancelled |
-| `payment.completed` | Payment Service | Order, Notification | Payment successful |
-| `payment.failed` | Payment Service | Order, Notification | Payment failed |
-| `inventory.reserved` | Inventory Service | Order, Notification | Stock reserved |
-| `inventory.insufficient` | Inventory Service | Order, Notification | Out of stock |
-| `notification.sent` | Notification Service | — | Notification delivered |
-| `*.dlq` | All services | — | Dead letter queues |
-
----
-
-## 📝 License
+## License
 
 MIT
