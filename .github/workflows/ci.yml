@@ -63,6 +63,7 @@ jobs:
           POSTGRES_DB: test_db
           REDIS_HOST: localhost
           REDIS_PORT: 6379
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/${{ matrix.service }}
         run: |
           if [ -d tests ]; then
             pytest tests/ -v --tb=short
