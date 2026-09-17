@@ -4,6 +4,6 @@ pydantic==2.13.5
 sqlalchemy==2.0.25
 asyncpg==0.29.0
 redis==8.1.0
-aiokafka==0.10.0
+aiokafka==0.14.0
 structlog==24.1.0
 httpx==0.28.1
