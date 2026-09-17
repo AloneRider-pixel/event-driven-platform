@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Event-Driven Platform CI
 
 on:
   push:
@@ -6,13 +6,20 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: '3.11'
+
 jobs:
   test:
+    name: Test ${{ matrix.service }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        service: [order-service, payment-service, inventory-service]
-    
+        service: [api-gateway, order-service, payment-service, inventory-service, notification-service]
     services:
       postgres:
         image: postgres:16
@@ -20,38 +27,59 @@ jobs:
           POSTGRES_DB: test_db
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
-        ports: ['5432:5432']
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d test_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
       redis:
         image: redis:7
-        ports: ['6379:6379']
-
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: ${{ matrix.service }}/requirements.txt
       - name: Install dependencies
         working-directory: ./${{ matrix.service }}
-        run: pip install -r requirements.txt pytest pytest-asyncio httpx
+        run: python -m pip install -r requirements.txt pytest pytest-asyncio httpx
       - name: Run tests
         working-directory: ./${{ matrix.service }}
         env:
           POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_db
           REDIS_HOST: localhost
-        run: pytest tests/ -v || echo "No tests found"
+          REDIS_PORT: 6379
+        run: pytest tests/ -v --tb=short
 
   docker-build:
+    name: Build ${{ matrix.service }}
     needs: test
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         service: [api-gateway, order-service, payment-service, inventory-service, notification-service]
     steps:
       - uses: actions/checkout@v4
-      - name: Build ${{ matrix.service }}
-        uses: docker/build-push-action@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
         with:
           context: ./${{ matrix.service }}
           push: false
-          tags: edp-${{ matrix.service }}:latest
+          tags: edp-${{ matrix.service }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
