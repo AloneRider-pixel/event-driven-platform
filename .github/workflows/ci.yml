@@ -17,6 +17,21 @@ env:
   PYTHON_VERSION: '3.11'
 
 jobs:
+  shared-contracts:
+    name: Shared event contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Install contract dependencies
+        run: python -m pip install pydantic==2.13.5 pytest==9.1.1
+      - name: Run shared contract tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: pytest shared/tests/ -v --tb=short
+
   test:
     name: Validate ${{ matrix.service }}
     runs-on: ubuntu-latest
