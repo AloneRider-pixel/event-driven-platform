@@ -7,19 +7,20 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class EventEnvelope(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     """
     Standard event envelope wrapping all domain events.
     Provides correlation, ordering, and metadata for distributed tracing.
     """
     event_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    event_type: str
+    event_type: str = Field(min_length=1)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    source_service: str
-    correlation_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    source_service: str = Field(min_length=1)
+    correlation_id: str = Field(default_factory=lambda: str(uuid.uuid4()), min_length=1)
     
     # Domain payload
     payload: Dict[str, Any]
@@ -28,10 +29,10 @@ class EventEnvelope(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
     
     # Idempotency
-    idempotency_key: Optional[str] = None
+    idempotency_key: Optional[str] = Field(default=None, min_length=1)
     
     # Retry tracking
-    attempt: int = 1
+    attempt: int = Field(default=1, ge=1)
     
     def to_json(self) -> str:
         return self.model_dump_json()
@@ -48,22 +49,25 @@ class EventEnvelope(BaseModel):
 # ─── Order Events ───
 
 class OrderCreatedPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     order_id: str
     customer_id: str
     product_id: str
-    quantity: int
-    total_amount: float
+    quantity: int = Field(gt=0)
+    total_amount: float = Field(gt=0)
     shipping_address: Optional[Dict[str, Any]] = None
 
 
 class OrderCancelledPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     order_id: str
     customer_id: str
     reason: str
-    refund_amount: float
+    refund_amount: float = Field(ge=0)
 
 
 class OrderStatusUpdatedPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     order_id: str
     previous_status: str
     new_status: str
@@ -73,59 +77,66 @@ class OrderStatusUpdatedPayload(BaseModel):
 # ─── Payment Events ───
 
 class PaymentCompletedPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     payment_id: str
     order_id: str
     customer_id: str
-    amount: float
+    amount: float = Field(gt=0)
     transaction_id: str
     payment_method: str
 
 
 class PaymentFailedPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     payment_id: str
     order_id: str
     customer_id: str
-    amount: float
+    amount: float = Field(gt=0)
     failure_reason: str
     retry_eligible: bool = True
 
 
 class PaymentRefundedPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     refund_id: str
     order_id: str
     customer_id: str
-    amount: float
+    amount: float = Field(gt=0)
     reason: str
 
 
 # ─── Inventory Events ───
 
 class InventoryReservedPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     reservation_id: str
     order_id: str
     product_id: str
-    quantity: int
+    quantity: int = Field(gt=0)
     expires_at: Optional[str] = None
 
 
 class InventoryReleasedPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     reservation_id: str
     order_id: str
     product_id: str
-    quantity: int
+    quantity: int = Field(gt=0)
     reason: str
 
 
 class InventoryInsufficientPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     order_id: str
     product_id: str
-    requested_quantity: int
-    available_quantity: int
+    requested_quantity: int = Field(gt=0)
+    available_quantity: int = Field(ge=0)
 
 
 # ─── Notification Events ───
 
 class NotificationSentPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     notification_id: str
     customer_id: str
     notification_type: str
@@ -133,6 +144,7 @@ class NotificationSentPayload(BaseModel):
 
 
 class NotificationFailedPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     customer_id: str
     notification_type: str
     error: str
