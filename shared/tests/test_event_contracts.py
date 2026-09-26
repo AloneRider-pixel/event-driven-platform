@@ -56,3 +56,27 @@ def test_retry_preserves_identity_and_increments_attempt() -> None:
     assert retried.event_id == event.event_id
     assert retried.correlation_id == event.correlation_id
     assert retried.attempt == event.attempt + 1
+
+def test_event_contracts_reject_unknown_fields() -> None:
+    payload = {"order_id": "O", "customer_id": "C", "product_id": "P", "quantity": 1, "total_amount": 10.0, "unexpected": True}
+    try:
+        OrderCreatedPayload.model_validate(payload)
+    except ValueError:
+        return
+    raise AssertionError("Unknown event payload fields must be rejected")
+
+
+def test_event_contracts_reject_invalid_money_and_quantity() -> None:
+    try:
+        OrderCreatedPayload(order_id="O", customer_id="C", product_id="P", quantity=0, total_amount=10.0)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Non-positive order quantities must be rejected")
+
+    try:
+        PaymentCompletedPayload(payment_id="P", order_id="O", customer_id="C", amount=0, transaction_id="T", payment_method="card")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Non-positive payment amounts must be rejected")
