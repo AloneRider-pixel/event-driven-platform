@@ -4,7 +4,7 @@ All events follow a standard envelope pattern for consistency.
 """
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
@@ -17,7 +17,7 @@ class EventEnvelope(BaseModel):
     """
     event_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     event_type: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     source_service: str
     correlation_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     
