@@ -17,6 +17,7 @@ class EventEnvelope(BaseModel):
     Provides correlation, ordering, and metadata for distributed tracing.
     """
     event_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    schema_version: str = Field(default="1.0", min_length=1)
     event_type: str = Field(min_length=1)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     source_service: str = Field(min_length=1)
