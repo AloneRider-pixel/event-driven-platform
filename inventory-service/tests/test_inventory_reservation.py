@@ -99,7 +99,9 @@ async def test_insufficient_atomic_update_publishes_insufficient_event(monkeypat
         session.statements.append(statement)
         if len(session.statements) == 1:
             return FakeResult(item)
-        return SimpleNamespace(rowcount=0)
+        if len(session.statements) == 2:
+            return SimpleNamespace(rowcount=0)
+        return FakeResult(item)
 
     session.execute = execute
     monkeypatch.setattr(main, "async_session", FakeSessionFactory(session))
