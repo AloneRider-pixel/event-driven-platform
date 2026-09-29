@@ -6,7 +6,7 @@ httpx==0.28.1
 redis==8.1.0
 pyjwt==2.14.0
 bcrypt==5.0.0
-python-multipart==0.0.6
+python-multipart==0.0.32
 structlog==26.1.0
 tenacity==9.1.4
 aiokafka==0.14.0
