@@ -122,4 +122,4 @@ async def test_insufficient_atomic_update_publishes_insufficient_event(monkeypat
     event = producer.publish.await_args.kwargs["event"]
     assert event["event_type"] == "inventory.insufficient"
     assert event["payload"]["available_quantity"] == 1
-    assert not notify.await_count
+    notify.assert_awaited_once_with("ORD-002", event)
