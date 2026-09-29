@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException
-from sqlalchemy import Column, DateTime, Integer, String, select, text
+from sqlalchemy import Column, DateTime, Integer, String, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -150,57 +150,75 @@ async def update_inventory(product_id: str, quantity: int):
 
 
 async def reserve_inventory(product_id: str, quantity: int, order_id: str, correlation_id: str = None):
-    """Reserve inventory for an order. Implements optimistic locking."""
+    """Reserve inventory with an atomic optimistic-lock update."""
     async with async_session() as session:
-        result = await session.execute(select(InventoryItem).where(InventoryItem.product_id == product_id))
+        result = await session.execute(
+            select(InventoryItem).where(InventoryItem.product_id == product_id)
+        )
         item = result.scalar_one_or_none()
-        
+
         if not item:
-            # Publish insufficient event
             await _publish_insufficient(product_id, quantity, 0, order_id, correlation_id)
             return
-        
-        available = item.quantity_available - item.quantity_reserved
-        
-        if available >= quantity:
-            item.quantity_reserved += quantity
-            item.version += 1
-            item.updated_at = datetime.utcnow()
-            
-            reservation = Reservation(
-                reservation_id=f"RES-{uuid.uuid4().hex[:8].upper()}",
-                order_id=order_id,
-                product_id=product_id,
-                quantity=quantity,
-                status="active",
-            )
-            session.add(reservation)
-            await session.commit()
-            
-            # Publish reserved event
-            event = {
-                "event_id": str(uuid.uuid4()),
-                "event_type": "inventory.reserved",
-                "timestamp": datetime.utcnow().isoformat(),
-                "source_service": "inventory-service",
-                "correlation_id": correlation_id or str(uuid.uuid4()),
-                "payload": {
-                    "reservation_id": reservation.reservation_id,
-                    "order_id": order_id,
-                    "product_id": product_id,
-                    "quantity": quantity,
-                },
-            }
-            await kafka_producer.publish(topic="inventory.events", event=event, key=order_id)
-            
-            # Notify order service
-            await _notify_order_service(order_id, event)
-            
-            logger.info(f"Reserved {quantity}x {product_id} for order {order_id}")
-        else:
-            await session.commit()
-            await _publish_insufficient(product_id, quantity, available, order_id, correlation_id)
 
+        current_version = item.version
+        update_result = await session.execute(
+            update(InventoryItem)
+            .where(
+                InventoryItem.product_id == product_id,
+                InventoryItem.version == current_version,
+                InventoryItem.quantity_available - InventoryItem.quantity_reserved >= quantity,
+            )
+            .values(
+                quantity_reserved=InventoryItem.quantity_reserved + quantity,
+                version=InventoryItem.version + 1,
+                updated_at=datetime.utcnow(),
+            )
+        )
+
+        if update_result.rowcount != 1:
+            # Another transaction changed the row, or there is no longer enough stock.
+            await session.rollback()
+            latest = await session.execute(
+                select(InventoryItem).where(InventoryItem.product_id == product_id)
+            )
+            fresh_item = latest.scalar_one_or_none()
+            available = (
+                fresh_item.quantity_available - fresh_item.quantity_reserved
+                if fresh_item
+                else 0
+            )
+            await _publish_insufficient(
+                product_id, quantity, available, order_id, correlation_id
+            )
+            return
+
+        reservation = Reservation(
+            reservation_id=f"RES-{uuid.uuid4().hex[:8].upper()}",
+            order_id=order_id,
+            product_id=product_id,
+            quantity=quantity,
+            status="active",
+        )
+        session.add(reservation)
+        await session.commit()
+
+        event = {
+            "event_id": str(uuid.uuid4()),
+            "event_type": "inventory.reserved",
+            "timestamp": datetime.utcnow().isoformat(),
+            "source_service": "inventory-service",
+            "correlation_id": correlation_id or str(uuid.uuid4()),
+            "payload": {
+                "reservation_id": reservation.reservation_id,
+                "order_id": order_id,
+                "product_id": product_id,
+                "quantity": quantity,
+            },
+        }
+        await kafka_producer.publish(topic="inventory.events", event=event, key=order_id)
+        await _notify_order_service(order_id, event)
+        logger.info(f"Reserved {quantity}x {product_id} for order {order_id}")
 
 async def release_inventory(order_id: str, correlation_id: str = None):
     """Release reserved inventory (for cancelled orders)."""
