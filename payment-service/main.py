@@ -6,7 +6,7 @@ import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import FastAPI
 from sqlalchemy import Column, DateTime, Float, String, Text, select, text
@@ -17,7 +17,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("payment-service")
 
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
-DATABASE_URL = f"postgresql+asyncpg://{os.getenv('POSTGRES_USER', 'app_user')}:{os.getenv('POSTGRES_PASSWORD', 'app_password')}@{POSTGRES_HOST}:5432/{os.getenv('POSTGRES_DB', 'ecommerce')}"
+APP_ENV = os.getenv("APP_ENV", "development").lower()
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+if APP_ENV not in {"development", "test"} and not POSTGRES_PASSWORD:
+    raise RuntimeError("POSTGRES_PASSWORD must be configured outside development/test environments.")
+DATABASE_URL = f"postgresql+asyncpg://{os.getenv('POSTGRES_USER', 'app_user')}:{POSTGRES_PASSWORD or "app_password"}@{POSTGRES_HOST}:5432/{os.getenv('POSTGRES_DB', 'ecommerce')}"
 KAFKA_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
 ORDER_SERVICE_URL = os.getenv("ORDER_SERVICE_URL", "http://order-service:8001")
 
@@ -139,7 +143,7 @@ async def process_payment(order_data: dict):
     event = {
         "event_id": str(uuid.uuid4()),
         "event_type": event_type,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "source_service": "payment-service",
         "correlation_id": correlation_id,
         "payload": payload,
