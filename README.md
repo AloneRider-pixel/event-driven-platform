@@ -1,10 +1,10 @@
-# 🚀 Event-Driven Distributed Order Platform
+# Event-Driven Distributed Order Platform
 
 [![CI](https://github.com/AloneRider-pixel/event-driven-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/AloneRider-pixel/event-driven-platform/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/AloneRider-pixel/event-driven-platform/actions/workflows/codeql.yml/badge.svg)](https://github.com/AloneRider-pixel/event-driven-platform/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Scalable order-processing backend demonstrating Kafka-based microservices, distributed workflows, retries, idempotency, and operational controls.
+Distributed order-processing reference system demonstrating Kafka messaging, microservice boundaries, idempotency, retries, compensation, dead-letter handling, and operational visibility.
 
 ## System flow
 
@@ -26,13 +26,14 @@ graph TB
 ## Engineering capabilities
 
 - API gateway authentication and rate limiting.
-- Independent Order, Payment, Inventory, and Notification services.
-- Kafka consumer groups and shared event contracts.
-- Saga-style compensation, retries, idempotency, and dead-letter handling.
-- Health/readiness endpoints, correlation IDs, structured logs, and metrics.
-- Dockerized local development and GitHub Actions validation.
+- Independent order, payment, inventory, and notification services.
+- Shared versioned event contracts.
+- At-least-once delivery with consumer idempotency.
+- Retry and compensation paths for distributed workflows.
+- Dead-letter and replay-oriented failure handling.
+- Health/readiness checks, correlation IDs, structured logs, and metrics.
 
-## Event contracts
+## Event contract examples
 
 | Topic | Producer | Consumers |
 |---|---|---|
@@ -42,7 +43,7 @@ graph TB
 | `payment.failed` | Payment | Order, Notification |
 | `inventory.reserved` | Inventory | Order, Notification |
 | `inventory.insufficient` | Inventory | Order, Notification |
-| `*.dlq` | Domain services | Investigation / replay |
+| `*.dlq` | Services | Investigation / replay |
 
 ## Stack
 
@@ -55,11 +56,11 @@ graph TB
 | Tests | Pytest, HTTPX |
 | Delivery | Docker Compose, GitHub Actions |
 
-## Repository layout
+## Repository map
 
 ```text
-shared/                 # Events, models, Kafka helpers
-api-gateway/            # Auth, routing, rate limiting
+shared/
+api-gateway/
 order-service/
 payment-service/
 inventory-service/
@@ -80,39 +81,35 @@ docker compose up -d
 
 ## Verification
 
-Run the shared contract suite and service-specific tests locally:
-
 ```bash
 pytest shared/tests/ -v
 pytest order-service/tests/ -v
 pytest inventory-service/tests/ -v
 ```
 
-CI also validates the service matrix and container builds.
+CI additionally validates the service matrix, container builds, CodeQL, dependency review, and Scorecard.
 
-## Reliability boundaries
+## Reliability contract
 
-Event delivery is treated as at-least-once: consumers must remain idempotent, retries must be safe, and dead-letter/replay behavior is part of the operational contract.
+Assume at-least-once event delivery. Consumers must be idempotent, retry handlers must be safe to replay, and dead-letter behavior must remain observable and recoverable.
 
-## Evidence and reproducibility
+## Security
 
-Load-test or reliability claims should include workload, environment, duration, tool version, sample size, and producing commit. Synthetic scenarios are validation fixtures, not production measurements.
+Keep authentication keys, database credentials, and provider credentials out of source control. Treat event payloads as untrusted input and preserve authorization at service boundaries.
+
+## Evidence policy
+
+Load-test and reliability claims should identify workload, duration, environment, tooling, sample count, and producing commit. Synthetic scenarios are validation fixtures.
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Verification](docs/verification.md)
+- [Evidence policy](docs/evidence-policy.md)
 
 ## Roadmap
 
-- Transactional outbox.
-- Versioned schema registry integration.
-- Kafka lag and consumer-health dashboards.
-- Distributed tracing.
-- Kubernetes deployment examples.
-
-## Review path
-
-Start with [architecture](docs/architecture.md), [verification](docs/verification.md), and [evidence policy](docs/evidence-policy.md). Review shared event contracts before changing consumers.
-
-## Maintenance standard
-
-Preserve backward-compatible event contracts, idempotency, retry safety, and observable failure states.
+Transactional outbox, schema-registry integration, Kafka lag dashboards, distributed tracing, and Kubernetes deployment examples.
 
 ## License
 
