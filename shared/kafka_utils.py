@@ -5,6 +5,7 @@ Provides async producer/consumer with retries, DLQ, and error handling.
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
@@ -115,7 +116,7 @@ class KafkaEventProducer:
                 "original_topic": topic,
                 "original_event": event,
                 "error": str(e),
-                "failed_at": str(__import__("datetime").datetime.utcnow()),
+                "failed_at": datetime.now(timezone.utc).isoformat(),
             }
             
             try:
