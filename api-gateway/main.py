@@ -6,7 +6,7 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 
 import redis.asyncio as redis
 from fastapi import FastAPI, HTTPException, Request, Depends
@@ -98,7 +98,7 @@ async def health():
         "status": "healthy",
         "service": "api-gateway",
         "version": "1.0.0",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "dependencies": {"redis": redis_status},
     }
 
@@ -131,7 +131,7 @@ async def register(request: Request):
         "email": email,
         "password": hashed,
         "role": "user",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
     })
     
     token = create_token({"sub": email, "role": "user"}, JWT_SECRET)
@@ -250,7 +250,7 @@ async def metrics():
     """Expose basic metrics."""
     return {
         "service": "api-gateway",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
