@@ -12,7 +12,8 @@
 ```mermaid
 graph TB
     CLIENT[React / Postman]
-    GW[FastAPI API Gateway\nAuth + Rate Limiting]
+    GW[FastAPI API Gateway
+Auth + Rate Limiting]
     ORDER[Order Service]
     KAFKA[(Apache Kafka)]
     PAY[Payment Service]
@@ -164,3 +165,11 @@ The project includes service-level tests plus HTTP and load-test tooling. CI sho
 ## License
 
 MIT
+
+## Repository review path
+
+Review [architecture](docs/architecture.md), [verification](docs/verification.md), and [evidence policy](docs/evidence-policy.md). Validate shared event contracts first, then the service test matrix and container builds.
+
+## Maintenance standard
+
+Preserve idempotency and retry safety when changing consumers, keep event contracts backward-compatible, and treat replay/dead-letter behavior as part of the production reliability model.
