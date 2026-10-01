@@ -1,175 +1,119 @@
 # 🚀 Event-Driven Distributed Order Platform
 
 [![CI](https://github.com/AloneRider-pixel/event-driven-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/AloneRider-pixel/event-driven-platform/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/AloneRider-pixel/event-driven-platform/actions/workflows/codeql.yml/badge.svg)](https://github.com/AloneRider-pixel/event-driven-platform/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Scalable e-commerce backend demonstrating event-driven microservices with Kafka, FastAPI, PostgreSQL, and Redis.**
+Scalable order-processing backend demonstrating Kafka-based microservices, distributed workflows, retries, idempotency, and operational controls.
 
-> **Portfolio focus:** microservices + event-driven architecture + distributed workflows + reliability + API engineering.
-
-## Architecture
+## System flow
 
 ```mermaid
 graph TB
-    CLIENT[React / Postman]
-    GW[FastAPI API Gateway
-Auth + Rate Limiting]
-    ORDER[Order Service]
-    KAFKA[(Apache Kafka)]
-    PAY[Payment Service]
-    INV[Inventory Service]
-    NOTIF[Notification Service]
-    PG[(PostgreSQL)]
-    REDIS[(Redis)]
-    DLQ[Dead Letter Queues]
-
-    CLIENT --> GW --> ORDER --> KAFKA
-    KAFKA --> PAY
-    KAFKA --> INV
-    KAFKA --> NOTIF
-    PAY --> KAFKA
-    INV --> KAFKA
-    PAY --> PG
+    CLIENT[Client] --> GW[API Gateway]
+    GW --> ORDER[Order Service]
+    ORDER --> KAFKA[(Kafka)]
+    KAFKA --> PAY[Payment]
+    KAFKA --> INV[Inventory]
+    KAFKA --> NOTIF[Notification]
+    PAY --> PG[(PostgreSQL)]
     INV --> PG
     ORDER --> PG
-    GW --> REDIS
-    KAFKA -. failed events .-> DLQ
+    GW --> REDIS[(Redis)]
+    KAFKA -.-> DLQ[Dead-letter queues]
 ```
-
-## Order lifecycle
-
-1. Client submits an order through the API gateway.
-2. Order Service validates and persists the order, then publishes `OrderCreated`.
-3. Payment and Inventory consume the event independently.
-4. Services publish success/failure events such as `PaymentCompleted` and `InventoryReserved`.
-5. Notification Service consumes domain events and dispatches customer notifications.
-6. Failed events can be routed to a dead-letter queue for investigation or replay.
 
 ## Engineering capabilities
 
-### Microservices
-- API gateway with authentication, rate limiting, routing, and versioned APIs.
-- Order, Payment, Inventory, and Notification services with separate responsibilities.
-- Shared event and model definitions.
-
-### Distributed systems
-- Kafka topics and consumer groups.
-- Saga-style compensation for distributed order workflows.
-- Idempotency for duplicate event delivery.
-- Exponential backoff and retry handling.
-- Dead-letter queues for failed events.
-- Optimistic inventory locking.
-
-### Reliability
-- Service health/readiness endpoints.
-- Correlation IDs and structured logs.
-- Prometheus-compatible metrics.
-- Graceful degradation and independent service scaling.
-
-### Security and performance
-- JWT authentication with role-based access.
-- Redis-backed rate limiting and caching.
-- Database indexing and connection pooling.
-- Dockerized services and GitHub Actions CI/CD.
-
-## Technology stack
-
-| Layer | Technology |
-|---|---|
-| Services | Python 3.11, FastAPI, SQLAlchemy |
-| Messaging | Apache Kafka, aiokafka |
-| Database | PostgreSQL 16 |
-| Cache | Redis 7 |
-| Authentication | JWT, bcrypt |
-| Testing | Pytest, HTTPX, Locust |
-| Infrastructure | Docker, Docker Compose, GitHub Actions |
-
-## Repository structure
-
-```text
-event-driven-platform/
-├── shared/                      # Shared models, events, Kafka helpers
-├── api-gateway/                 # Auth, routing, rate limiting
-├── order-service/               # Order API + event producer
-├── payment-service/             # Payment consumer + workflow
-├── inventory-service/           # Reservation consumer + stock logic
-├── notification-service/        # Event-driven notifications
-├── scripts/                     # Utilities and load testing
-├── .github/workflows/ci.yml
-├── docker-compose.yml
-└── README.md
-```
-
-## Local development
-
-### Prerequisites
-
-- Docker + Docker Compose
-
-### Start
-
-```bash
-git clone https://github.com/AloneRider-pixel/event-driven-platform.git
-cd event-driven-platform
-cp .env.example .env
-docker-compose up -d
-```
-
-The stack starts Kafka, PostgreSQL, Redis, the API gateway, and the domain services.
-
-### Example request
-
-```bash
-curl -X POST http://localhost:8000/api/v1/orders \
-  -H "Content-Type: application/json" \
-  -d '{"product_id":"PROD-001","quantity":2,"customer_id":"CUST-001"}'
-```
-
-## API surface
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| POST | `/api/v1/orders` | Create an order |
-| GET | `/api/v1/orders/{id}` | Retrieve an order |
-| GET | `/api/v1/orders` | Paginated order list |
-| PUT | `/api/v1/orders/{id}/cancel` | Cancel an order |
-| POST | `/api/v1/orders/{id}/retry` | Retry a failed order |
-| GET | `/api/v1/inventory/{product_id}` | Check inventory |
-| GET | `/health` | Health check |
-| GET | `/metrics` | Service metrics |
+- API gateway authentication and rate limiting.
+- Independent Order, Payment, Inventory, and Notification services.
+- Kafka consumer groups and shared event contracts.
+- Saga-style compensation, retries, idempotency, and dead-letter handling.
+- Health/readiness endpoints, correlation IDs, structured logs, and metrics.
+- Dockerized local development and GitHub Actions validation.
 
 ## Event contracts
 
 | Topic | Producer | Consumers |
 |---|---|---|
-| `order.created` | Order Service | Payment, Inventory, Notification |
-| `order.cancelled` | Order Service | Payment, Inventory, Notification |
-| `payment.completed` | Payment Service | Order, Notification |
-| `payment.failed` | Payment Service | Order, Notification |
-| `inventory.reserved` | Inventory Service | Order, Notification |
-| `inventory.insufficient` | Inventory Service | Order, Notification |
+| `order.created` | Order | Payment, Inventory, Notification |
+| `order.cancelled` | Order | Payment, Inventory, Notification |
+| `payment.completed` | Payment | Order, Notification |
+| `payment.failed` | Payment | Order, Notification |
+| `inventory.reserved` | Inventory | Order, Notification |
+| `inventory.insufficient` | Inventory | Order, Notification |
 | `*.dlq` | Domain services | Investigation / replay |
 
-## Testing
+## Stack
 
-The project includes service-level tests plus HTTP and load-test tooling. CI should remain green before changes are merged into `main`.
+| Layer | Technology |
+|---|---|
+| Services | Python 3.11, FastAPI, SQLAlchemy |
+| Messaging | Apache Kafka, aiokafka |
+| Data | PostgreSQL 16, Redis 7 |
+| Auth | JWT, bcrypt |
+| Tests | Pytest, HTTPX |
+| Delivery | Docker Compose, GitHub Actions |
+
+## Repository layout
+
+```text
+shared/                 # Events, models, Kafka helpers
+api-gateway/            # Auth, routing, rate limiting
+order-service/
+payment-service/
+inventory-service/
+notification-service/
+scripts/
+docs/
+.github/workflows/
+```
+
+## Quick start
+
+```bash
+git clone https://github.com/AloneRider-pixel/event-driven-platform.git
+cd event-driven-platform
+cp .env.example .env
+docker compose up -d
+```
+
+## Verification
+
+Run the shared contract suite and service-specific tests locally:
+
+```bash
+pytest shared/tests/ -v
+pytest order-service/tests/ -v
+pytest inventory-service/tests/ -v
+```
+
+CI also validates the service matrix and container builds.
+
+## Reliability boundaries
+
+Event delivery is treated as at-least-once: consumers must remain idempotent, retries must be safe, and dead-letter/replay behavior is part of the operational contract.
+
+## Evidence and reproducibility
+
+Load-test or reliability claims should include workload, environment, duration, tool version, sample size, and producing commit. Synthetic scenarios are validation fixtures, not production measurements.
 
 ## Roadmap
 
-- Transactional outbox for reliable event publication.
-- Schema registry and versioned event contracts.
+- Transactional outbox.
+- Versioned schema registry integration.
 - Kafka lag and consumer-health dashboards.
-- Distributed tracing with OpenTelemetry.
-- Kubernetes deployment and autoscaling examples.
+- Distributed tracing.
+- Kubernetes deployment examples.
+
+## Review path
+
+Start with [architecture](docs/architecture.md), [verification](docs/verification.md), and [evidence policy](docs/evidence-policy.md). Review shared event contracts before changing consumers.
+
+## Maintenance standard
+
+Preserve backward-compatible event contracts, idempotency, retry safety, and observable failure states.
 
 ## License
 
 MIT
-
-## Repository review path
-
-Review [architecture](docs/architecture.md), [verification](docs/verification.md), and [evidence policy](docs/evidence-policy.md). Validate shared event contracts first, then the service test matrix and container builds.
-
-## Maintenance standard
-
-Preserve idempotency and retry safety when changing consumers, keep event contracts backward-compatible, and treat replay/dead-letter behavior as part of the production reliability model.
