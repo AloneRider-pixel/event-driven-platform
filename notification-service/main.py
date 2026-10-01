@@ -6,7 +6,7 @@ import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import FastAPI
 
@@ -60,7 +60,7 @@ async def send_notification(customer_id: str, notification_type: str, subject: s
         "body": body,
         "order_id": order_id,
         "status": "sent",
-        "sent_at": datetime.utcnow().isoformat(),
+        "sent_at": datetime.now(timezone.utc).isoformat(),
     }
     notifications.append(notification)
     
@@ -70,7 +70,7 @@ async def send_notification(customer_id: str, notification_type: str, subject: s
     event = {
         "event_id": str(uuid.uuid4()),
         "event_type": "notification.sent",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "source_service": "notification-service",
         "payload": {
             "notification_id": notification_id,
