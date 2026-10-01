@@ -24,7 +24,19 @@ REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 ORDER_SERVICE_URL = os.getenv("ORDER_SERVICE_URL", "http://order-service:8001")
 INVENTORY_SERVICE_URL = os.getenv("INVENTORY_SERVICE_URL", "http://inventory-service:8003")
-APP_ENV = os.getenv("APP_ENV", "development").lower()\nJWT_SECRET = os.getenv("JWT_SECRET_KEY", "")\nCORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",") if origin.strip()]\n\nif APP_ENV != "development" and not JWT_SECRET:\n    raise RuntimeError("JWT_SECRET_KEY must be configured outside development environments.")
+APP_ENV = os.getenv("APP_ENV", "development").lower()
+JWT_SECRET = os.getenv("JWT_SECRET_KEY", "")
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:3000,http://localhost:5173",
+    ).split(",")
+    if origin.strip()
+]
+
+if APP_ENV != "development" and not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET_KEY must be configured outside development environments.")
 
 redis_client = None
 rate_limiter = None
