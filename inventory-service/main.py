@@ -6,7 +6,7 @@ import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
 from sqlalchemy import Column, DateTime, Integer, String, select, text, update
@@ -17,7 +17,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("inventory-service")
 
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
-DATABASE_URL = f"postgresql+asyncpg://{os.getenv('POSTGRES_USER', 'app_user')}:{os.getenv('POSTGRES_PASSWORD', 'app_password')}@{POSTGRES_HOST}:5432/{os.getenv('POSTGRES_DB', 'ecommerce')}"
+APP_ENV = os.getenv("APP_ENV", "development").lower()
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+if APP_ENV not in {"development", "test"} and not POSTGRES_PASSWORD:
+    raise RuntimeError("POSTGRES_PASSWORD must be configured outside development/test environments.")
+DATABASE_URL = f"postgresql+asyncpg://{os.getenv('POSTGRES_USER', 'app_user')}:{POSTGRES_PASSWORD or "app_password"}@{POSTGRES_HOST}:5432/{os.getenv('POSTGRES_DB', 'ecommerce')}"
 KAFKA_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
 ORDER_SERVICE_URL = os.getenv("ORDER_SERVICE_URL", "http://order-service:8001")
 
@@ -206,7 +210,7 @@ async def reserve_inventory(product_id: str, quantity: int, order_id: str, corre
         event = {
             "event_id": str(uuid.uuid4()),
             "event_type": "inventory.reserved",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "source_service": "inventory-service",
             "correlation_id": correlation_id or str(uuid.uuid4()),
             "payload": {
@@ -243,7 +247,7 @@ async def release_inventory(order_id: str, correlation_id: str = None):
     event = {
         "event_id": str(uuid.uuid4()),
         "event_type": "inventory.released",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "source_service": "inventory-service",
         "correlation_id": correlation_id or str(uuid.uuid4()),
         "payload": {
@@ -261,7 +265,7 @@ async def _publish_insufficient(product_id: str, requested: int, available: int,
     event = {
         "event_id": str(uuid.uuid4()),
         "event_type": "inventory.insufficient",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "source_service": "inventory-service",
         "correlation_id": correlation_id or str(uuid.uuid4()),
         "payload": {
