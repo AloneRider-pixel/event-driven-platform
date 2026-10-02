@@ -91,7 +91,7 @@ CI additionally validates the service matrix, container builds, CodeQL, dependen
 
 ## Reliability contract
 
-Assume at-least-once event delivery. Consumers must be idempotent, retry handlers must be safe to replay, and dead-letter behavior must remain observable and recoverable.
+Assume at-least-once event delivery. Order mutations and their outbound events are committed together through the transactional outbox. A background publisher drains durable outbox rows to Kafka, so a broker outage does not lose an event after the database transaction succeeds. Consumers must remain idempotent because a crash after Kafka publication but before the outbox acknowledgement can legitimately produce a duplicate.
 
 ## Security
 
@@ -109,7 +109,7 @@ Load-test and reliability claims should identify workload, duration, environment
 
 ## Roadmap
 
-Transactional outbox, schema-registry integration, Kafka lag dashboards, distributed tracing, and Kubernetes deployment examples.
+Outbox replay tooling, schema-registry integration, Kafka lag dashboards, distributed tracing, and Kubernetes deployment examples.
 
 ## License
 
