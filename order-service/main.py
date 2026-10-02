@@ -2,6 +2,7 @@
 Order Service - Core order management microservice.
 Handles order CRUD, publishes events to Kafka, implements saga pattern.
 """
+import asyncio
 import json
 import logging
 import os
@@ -15,6 +16,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import Column, DateTime, Float, Integer, String, Text, select, text, func
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
+from shared.events import EventEnvelope, OrderCancelledPayload, OrderCreatedPayload, create_event
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("order-service")
@@ -47,11 +50,148 @@ class Order(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     metadata_json = Column("metadata", Text, default="{}")
 
+
+class OutboxEvent(Base):
+    __tablename__ = "outbox_events"
+
+    event_id = Column(String, primary_key=True)
+    topic = Column(String, nullable=False)
+    message_key = Column(String, nullable=False)
+    correlation_id = Column(String, nullable=True, index=True)
+    payload = Column(Text, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
+    )
+    published_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    attempts = Column(Integer, default=0, nullable=False)
+    last_error = Column(Text, nullable=True)
+
+
 engine = create_async_engine(DATABASE_URL, pool_size=10, max_overflow=20)
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-# ─── Kafka ───
+# ─── Kafka / Transactional Outbox ───
 kafka_producer = None
+outbox_task: Optional[asyncio.Task] = None
+
+
+def build_order_created_event(
+    *,
+    order_id: str,
+    customer_id: str,
+    product_id: str,
+    quantity: int,
+    total_amount: float,
+    correlation_id: str,
+    idempotency_key: Optional[str],
+    shipping_address: Optional[dict] = None,
+) -> EventEnvelope:
+    payload = OrderCreatedPayload(
+        order_id=order_id,
+        customer_id=customer_id,
+        product_id=product_id,
+        quantity=quantity,
+        total_amount=total_amount,
+        shipping_address=shipping_address,
+    )
+    return create_event(
+        event_type="order.created",
+        source_service="order-service",
+        payload=payload,
+        correlation_id=correlation_id,
+        idempotency_key=idempotency_key,
+    )
+
+
+def build_order_cancelled_event(
+    *,
+    order_id: str,
+    customer_id: str,
+    refund_amount: float,
+    correlation_id: str,
+) -> EventEnvelope:
+    payload = OrderCancelledPayload(
+        order_id=order_id,
+        customer_id=customer_id,
+        reason="customer_request",
+        refund_amount=refund_amount,
+    )
+    return create_event(
+        event_type="order.cancelled",
+        source_service="order-service",
+        payload=payload,
+        correlation_id=correlation_id,
+    )
+
+
+def enqueue_outbox_event(
+    session: AsyncSession,
+    event: EventEnvelope,
+    topic: str,
+    key: str,
+) -> None:
+    session.add(
+        OutboxEvent(
+            event_id=event.event_id,
+            topic=topic,
+            message_key=key,
+            correlation_id=event.correlation_id,
+            payload=event.to_json(),
+        )
+    )
+
+
+async def publish_outbox_once(batch_size: int = 50) -> int:
+    if kafka_producer is None:
+        return 0
+
+    async with async_session() as session:
+        result = await session.execute(
+            select(OutboxEvent)
+            .where(OutboxEvent.published_at.is_(None))
+            .order_by(OutboxEvent.created_at)
+            .limit(batch_size)
+        )
+        pending = result.scalars().all()
+        published = 0
+
+        for row in pending:
+            row.attempts += 1
+            try:
+                event = EventEnvelope.from_json(row.payload)
+                await kafka_producer.publish(
+                    topic=row.topic,
+                    event=json.loads(event.to_json()),
+                    key=row.message_key,
+                )
+            except Exception as exc:
+                row.last_error = str(exc)[:2000]
+                logger.exception("Outbox publish failed for event %s", row.event_id)
+            else:
+                row.published_at = datetime.now(timezone.utc)
+                row.last_error = None
+                published += 1
+
+        if pending:
+            await session.commit()
+        return published
+
+
+async def run_outbox_publisher() -> None:
+    while True:
+        try:
+            await publish_outbox_once()
+        except Exception:
+            logger.exception("Outbox publisher cycle failed")
+        try:
+            await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            logger.info("Outbox publisher stopped")
+            raise
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -66,9 +206,14 @@ async def lifespan(app: FastAPI):
     # Create tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
+    outbox_task = asyncio.create_task(run_outbox_publisher())
     logger.info("Order Service started ✓")
     yield
+
+    if outbox_task:
+        outbox_task.cancel()
+        await asyncio.gather(outbox_task, return_exceptions=True)
     await kafka_producer.stop()
     await engine.dispose()
 
@@ -139,7 +284,17 @@ async def create_order(
     
     # Create order
     order_id = f"ORD-{uuid.uuid4().hex[:8].upper()}"
-    
+    event = build_order_created_event(
+        order_id=order_id,
+        customer_id=request.customer_id,
+        product_id=request.product_id,
+        quantity=request.quantity,
+        total_amount=total_amount,
+        correlation_id=correlation_id,
+        idempotency_key=request.idempotency_key,
+        shipping_address=request.shipping_address,
+    )
+
     async with async_session() as session:
         order = Order(
             order_id=order_id,
@@ -152,33 +307,11 @@ async def create_order(
             correlation_id=correlation_id,
         )
         session.add(order)
+        enqueue_outbox_event(session, event, topic="order.events", key=order_id)
         await session.commit()
-    
-    logger.info(f"Order created: {order_id}, customer={request.customer_id}")
-    
-    # Publish OrderCreated event
-    event = {
-        "event_id": str(uuid.uuid4()),
-        "event_type": "order.created",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "source_service": "order-service",
-        "correlation_id": correlation_id,
-        "payload": {
-            "order_id": order_id,
-            "customer_id": request.customer_id,
-            "product_id": request.product_id,
-            "quantity": request.quantity,
-            "total_amount": total_amount,
-        },
-        "idempotency_key": request.idempotency_key,
-    }
-    
-    await kafka_producer.publish(
-        topic="order.events",
-        event=event,
-        key=order_id,
-    )
-    
+
+    logger.info("Order created and queued for publication: %s", order_id)
+
     return OrderResponse(
         order_id=order_id,
         customer_id=request.customer_id,
@@ -264,25 +397,16 @@ async def cancel_order(order_id: str):
         
         order.status = "cancelled"
         order.updated_at = datetime.utcnow()
+        event = build_order_cancelled_event(
+            order_id=order_id,
+            customer_id=order.customer_id,
+            refund_amount=order.total_amount,
+            correlation_id=order.correlation_id or str(uuid.uuid4()),
+        )
+        enqueue_outbox_event(session, event, topic="order.events", key=order_id)
         await session.commit()
-    
-    # Publish cancellation event
-    event = {
-        "event_id": str(uuid.uuid4()),
-        "event_type": "order.cancelled",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "source_service": "order-service",
-        "correlation_id": order.correlation_id or str(uuid.uuid4()),
-        "payload": {
-            "order_id": order_id,
-            "customer_id": order.customer_id,
-            "reason": "customer_request",
-            "refund_amount": order.total_amount,
-        },
-    }
-    
-    await kafka_producer.publish(topic="order.events", event=event, key=order_id)
-    
+
+    logger.info("Order cancelled and queued for publication: %s", order_id)
     return {"order_id": order_id, "status": "cancelled", "message": "Order cancelled successfully"}
 
 
