@@ -82,3 +82,47 @@ class TestOrderStatus:
         assert PaymentStatus.COMPLETED == "completed"
         assert PaymentStatus.FAILED == "failed"
         assert PaymentStatus.REFUNDED == "refunded"
+
+
+class TestTransactionalOutbox:
+    def test_order_created_event_payload_is_durable(self):
+        from main import OutboxEvent, build_order_created_event
+        from shared.events import EventEnvelope
+
+        event = build_order_created_event(
+            order_id="ORD-OUTBOX",
+            customer_id="CUST-OUTBOX",
+            product_id="PROD-OUTBOX",
+            quantity=2,
+            total_amount=99.98,
+            correlation_id="CORR-001",
+            idempotency_key="IDEMP-001",
+        )
+        row = OutboxEvent(
+            event_id=event.event_id,
+            topic="order.events",
+            message_key="ORD-OUTBOX",
+            correlation_id=event.correlation_id,
+            payload=event.to_json(),
+        )
+
+        restored = EventEnvelope.from_json(row.payload)
+        assert row.published_at is None
+        assert row.attempts == 0
+        assert restored.event_id == row.event_id
+        assert restored.payload["order_id"] == "ORD-OUTBOX"
+        assert restored.idempotency_key == "IDEMP-001"
+
+    def test_order_cancel_event_keeps_correlation_id(self):
+        from main import build_order_cancelled_event
+
+        event = build_order_cancelled_event(
+            order_id="ORD-CANCEL",
+            customer_id="CUST-1",
+            refund_amount=49.99,
+            correlation_id="CORR-CANCEL",
+        )
+
+        assert event.event_type == "order.cancelled"
+        assert event.correlation_id == "CORR-CANCEL"
+        assert event.payload["reason"] == "customer_request"
