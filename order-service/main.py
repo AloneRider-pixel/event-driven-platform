@@ -28,7 +28,10 @@ APP_ENV = os.getenv("APP_ENV", "development").lower()
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
 if APP_ENV not in {"development", "test"} and not POSTGRES_PASSWORD:
     raise RuntimeError("POSTGRES_PASSWORD must be configured outside development/test environments.")
-DATABASE_URL = f"postgresql+asyncpg://{os.getenv('POSTGRES_USER', 'app_user')}:{POSTGRES_PASSWORD or "app_password"}@{POSTGRES_HOST}:5432/{os.getenv('POSTGRES_DB', 'ecommerce')}"
+POSTGRES_USER = os.getenv("POSTGRES_USER", "app_user")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "ecommerce")
+DATABASE_PASSWORD = POSTGRES_PASSWORD or "app_password"
+DATABASE_URL = f"postgresql+asyncpg://{POSTGRES_USER}:{DATABASE_PASSWORD}@{POSTGRES_HOST}:5432/{POSTGRES_DB}"
 KAFKA_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
 
 # ─── Database ───
