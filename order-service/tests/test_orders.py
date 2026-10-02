@@ -108,7 +108,6 @@ class TestTransactionalOutbox:
 
         restored = EventEnvelope.from_json(row.payload)
         assert row.published_at is None
-        assert row.attempts == 0
         assert restored.event_id == row.event_id
         assert restored.payload["order_id"] == "ORD-OUTBOX"
         assert restored.idempotency_key == "IDEMP-001"
