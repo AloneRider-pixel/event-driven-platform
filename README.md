@@ -4,7 +4,11 @@
 [![CodeQL](https://github.com/AloneRider-pixel/event-driven-platform/actions/workflows/codeql.yml/badge.svg)](https://github.com/AloneRider-pixel/event-driven-platform/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Distributed order-processing reference system demonstrating Kafka messaging, microservice boundaries, idempotency, retries, compensation, dead-letter handling, and operational visibility.
+Distributed order-processing reference system demonstrating Kafka messaging, microservice boundaries, transactional consistency, idempotency, retries, compensation, dead-letter handling, and operational visibility.
+
+## Why it matters
+
+Distributed transactions fail at boundaries: a database commit can succeed while a broker is unavailable, or a consumer can crash after handling an event but before acknowledging it. This repository makes those failure modes explicit and testable.
 
 ## System flow
 
@@ -29,11 +33,12 @@ graph TB
 - Independent order, payment, inventory, and notification services.
 - Shared versioned event contracts.
 - At-least-once delivery with consumer idempotency.
+- Transactional outbox for database/event durability.
 - Retry and compensation paths for distributed workflows.
 - Dead-letter and replay-oriented failure handling.
 - Health/readiness checks, correlation IDs, structured logs, and metrics.
 
-## Event contract examples
+## Event contracts
 
 | Topic | Producer | Consumers |
 |---|---|---|
@@ -87,11 +92,11 @@ pytest order-service/tests/ -v
 pytest inventory-service/tests/ -v
 ```
 
-CI additionally validates the service matrix, container builds, CodeQL, dependency review, and Scorecard.
+CI additionally validates the service matrix, event contracts, container builds, CodeQL, dependency review, and Scorecard.
 
 ## Reliability contract
 
-Assume at-least-once event delivery. Order mutations and their outbound events are committed together through the transactional outbox. A background publisher drains durable outbox rows to Kafka, so a broker outage does not lose an event after the database transaction succeeds. Consumers must remain idempotent because a crash after Kafka publication but before the outbox acknowledgement can legitimately produce a duplicate.
+Assume at-least-once event delivery. Order mutations and their outbound events are committed together through the transactional outbox. A publisher drains durable outbox rows to Kafka, so a broker outage does not lose an event after the database transaction succeeds. Consumers remain idempotent because a crash after publication but before acknowledgement can legitimately produce a duplicate.
 
 ## Security
 
@@ -106,6 +111,10 @@ Load-test and reliability claims should identify workload, duration, environment
 - [Architecture](docs/architecture.md)
 - [Verification](docs/verification.md)
 - [Evidence policy](docs/evidence-policy.md)
+
+## Contribution standard
+
+When changing a service contract, update the producer, consumer, fixtures, and contract validation together. New retry or compensation behavior should include an explicit failure-path test.
 
 ## Roadmap
 
