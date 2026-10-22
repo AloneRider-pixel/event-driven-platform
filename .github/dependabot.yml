@@ -4,22 +4,47 @@ updates:
     directory: /api-gateway
     schedule:
       interval: weekly
+    groups:
+      pip-minor-patch:
+        update-types:
+          - minor
+          - patch
   - package-ecosystem: pip
     directory: /order-service
     schedule:
       interval: weekly
+    groups:
+      pip-minor-patch:
+        update-types:
+          - minor
+          - patch
   - package-ecosystem: pip
     directory: /payment-service
     schedule:
       interval: weekly
+    groups:
+      pip-minor-patch:
+        update-types:
+          - minor
+          - patch
   - package-ecosystem: pip
     directory: /inventory-service
     schedule:
       interval: weekly
+    groups:
+      pip-minor-patch:
+        update-types:
+          - minor
+          - patch
   - package-ecosystem: pip
     directory: /notification-service
     schedule:
       interval: weekly
+    groups:
+      pip-minor-patch:
+        update-types:
+          - minor
+          - patch
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -28,3 +53,9 @@ updates:
       codeql-action:
         patterns:
           - "github/codeql-action*"
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
