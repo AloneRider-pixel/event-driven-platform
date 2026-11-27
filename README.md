@@ -4,7 +4,7 @@
 [![CodeQL](https://github.com/AloneRider-pixel/event-driven-platform/actions/workflows/codeql.yml/badge.svg)](https://github.com/AloneRider-pixel/event-driven-platform/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Distributed order-processing reference system demonstrating Kafka messaging, microservice boundaries, transactional consistency, idempotency, retries, compensation, dead-letter handling, and operational visibility.
+Distributed order-processing reference system demonstrating Kafka messaging, microservice boundaries, an outbox for order events, basic idempotency checks, dead-letter handling, inventory release on order cancellation, and operational visibility. Kafka publishing retries up to three times and the outbox republishes unpublished rows. Refunds, payment-failure compensation and payment or workflow retries are not implemented; payment outcomes are simulated.
 
 ## Why it matters
 
@@ -34,7 +34,7 @@ graph TB
 - Shared versioned event contracts.
 - At-least-once delivery with consumer idempotency.
 - Transactional outbox for database/event durability.
-- Retry and compensation paths for distributed workflows.
+- Inventory release when an order is cancelled. Refunds, payment-failure compensation and payment or workflow retries are not implemented yet.
 - Dead-letter and replay-oriented failure handling.
 - Health/readiness checks, correlation IDs, structured logs, and metrics.
 
